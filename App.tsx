@@ -1,7 +1,9 @@
-import { WelcomeScreen } from "@/screens"
+import { Text } from "react-native"
 
 export default function App() {
   return (
-    <WelcomeScreen />
+    <Text>
+      App
+    </Text>
   )
 }
