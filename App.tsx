@@ -1,7 +1,7 @@
-import WelcomeScreen from './src/screens/WelcomeScreen';
+import { WelcomeScreen } from "@/screens"
 
 export default function App() {
   return (
     <WelcomeScreen />
-  );
+  )
 }
