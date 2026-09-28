@@ -2,8 +2,8 @@
 
 | Урок | Описание |
 | ---- | -------- |
-| **👉 1** | Инициализация проекта, настройка навигации и типизация данных. Подготовка стартового экрана. |
-| 2 | Логика викторины — перемешивание массива, генерация 4 уникальных вариантов (без дублей) и механика подсветки (зеленый/красный) при клике. |
+| 1 | Инициализация проекта, настройка навигации и типизация данных. Подготовка стартового экрана. |
+| **👉 2** | Логика викторины — перемешивание массива, генерация 4 уникальных вариантов (без дублей) и механика подсветки (зеленый/красный) при клике. |
 | 3 | Экран результатов, подсчет очков и сброс состояния. |
 
 Переход из веба в мобильную разработку — логичный и очень интересный шаг.
@@ -20,182 +20,173 @@
 
 ---
 
-## Урок 1: Базовая настройка и Стартовый экран
+## Урок 2: Игровая логика, варианты ответов без дублей и реактивная интерактивность
 
-### 1. Инициализация проекта и установка навигации (установлены)
+В этом уроке мы полностью напишем `QuizScreen.tsx`. Нам нужно:
 
-Открой терминал и создай новый проект Expo с шаблоном TypeScript:
+1. Загрузить вопросы из JSON и динамически генерировать 4 варианта ответов для текущего вопроса.
+2. Исключить совпадение: название страны из правильного ответа **не должно попадать** в 3 случайных неправильных варианта.
+3. Добавить обработку клика с интерактивной подсветкой:
+* Правильный вариант красится в **зеленый**.
+* Неверный выбранный — в **красный**.
+* Все варианты блокируются от повторных кликов до перехода к следующему вопросу.
 
-```bash
-npx create-expo-app rn-quiz-app -t expo-template-blank-typescript
-cd rn-quiz-app
-```
 
-В мобильных приложениях нет URL-адресов, поэтому вместо `react-router-dom` стандартом является `React Navigation`. Установим его:
 
-```bash
-npm install @react-navigation/native @react-navigation/native-stack
-npx expo install react-native-screens react-native-safe-area-context
-```
+---
 
-### 2. Подготовка данных и типов
+### Шаг 1: Код `QuizScreen.tsx`
 
-Создай в корне проекта папку `src`, а в ней — две подпапки: `data` и `screens`.
-
-1. Создай файл **`src/data/quiz_questions.json`** и вставь туда весь твой JSON с вопросами и массивом стран.
-2. Создай файл **`src/types.ts`** для описания структур (раз уж мы пишем на TS):
-
-```typescript
-// src/types.ts
-export interface Question {
-  question: string;
-  correctAnswer: string;
-  flag: string;
-}
-
-export interface QuizData {
-  questions: Question[];
-  countries: string[];
-}
-
-// Типизация для навигации
-export type RootStackParamList = {
-  Welcome: undefined;
-  Quiz: undefined;
-};
-```
-
-### 3. Создание стартового экрана (Welcome Screen)
-
-В React Native стили пишутся через `StyleSheet.create`. Обрати внимание, как `div` превратился в `View`, а `p`/`h1` — в `Text`.
-
-Создай файл **`src/screens/WelcomeScreen.tsx`**:
-
-```tsx
-// src/screens/WelcomeScreen.tsx
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../types';
-
-type Props = {
-  navigation: NativeStackNavigationProp<RootStackParamList, 'Welcome'>;
-};
-
-export default function WelcomeScreen({ navigation }: Props) {
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Угадай Флаг 🌍</Text>
-      <Text style={styles.subtitle}>Проверь свои знания стран мира!</Text>
-
-      {/* TouchableOpacity — это аналог <button> с анимацией нажатия */}
-      <TouchableOpacity 
-        style={styles.button}
-        activeOpacity={0.8}
-        onPress={() => navigation.navigate('Quiz')}
-      >
-        <Text style={styles.buttonText}>Начать игру</Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1, // Занимает весь экран (как height: 100vh)
-    backgroundColor: '#f8f9fa',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#2c3e50',
-    marginBottom: 10,
-  },
-  subtitle: {
-    fontSize: 18,
-    color: '#7f8c8d',
-    marginBottom: 40,
-    textAlign: 'center',
-  },
-  button: {
-    backgroundColor: '#3498db',
-    paddingVertical: 15,
-    paddingHorizontal: 40,
-    borderRadius: 12,
-    elevation: 3, // Тень для Android
-    shadowColor: '#000', // Тени для iOS
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-});
-```
-
-### 4. Настройка точки входа
-
-Теперь соберем навигацию в главном файле. Создай файл-заглушку `src/screens/QuizScreen.tsx` (мы наполним его во втором уроке):
+Замени весь код в файле **`src/screens/QuizScreen.tsx`** на следующий:
 
 ```tsx
 // src/screens/QuizScreen.tsx
-import React from 'react';
-import { View, Text } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import quizData from '../data/quiz_questions.json';
+import { Question } from '../types';
+
+// 1. Чистая функция перемешивания массива (Алгоритм Фишера-Йетса)
+function shuffleArray<T>(array: T[]): T[] {
+  return [...array].sort(() => Math.random() - 0.5);
+}
+
+// 2. Генерация 4 вариантов ответов (1 правильный + 3 случайных без дублей)
+function generateOptions(
+  correctAnswer: string, 
+  allCountries: string[],
+): string[] {
+  // Фильтруем: убираем правильный ответ из пула возможных неправильных
+  const wrongCountriesFiltered = 
+    allCountries.filter(country => country !== correctAnswer);
+
+  // Перемешиваем и берем первые 3
+  const randomWrongAnswers = shuffleArray(wrongCountriesFiltered).slice(0, 3);
+
+  // Объединяем и перемешиваем все 4 варианта
+  return shuffleArray([...randomWrongAnswers, correctAnswer]);
+}
 
 export default function QuizScreen() {
+  // Зафиксируем 10 случайных вопросов на всю сессию игры
+  const questionsForGame = useMemo<Question[]>(() => {
+    return shuffleArray(quizData.questions).slice(0, 10);
+  }, []);
+
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [options, setOptions] = useState<string[]>([]);
+  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
+  const [score, setScore] = useState(0);
+
+  const currentQuestion = questionsForGame[currentIndex];
+
+  // Генерируем варианты при смене вопроса
+  useEffect(() => {
+    if (currentQuestion) {
+      const generated = 
+        generateOptions(currentQuestion.correctAnswer, quizData.countries);
+
+      setOptions(generated);
+      setSelectedAnswer(null);
+    }
+  }, [currentIndex, currentQuestion]);
+
+  if (!currentQuestion) return null;
+
+  // Обработка выбора ответа
+  const handleOptionClick = (option: string) => {
+    if (selectedAnswer !== null) return; // Игнорируем повторные клики
+
+    setSelectedAnswer(option);
+    if (option === currentQuestion.correctAnswer) {
+      setScore(prev => prev + 1);
+    }
+  };
+
+  // Переход к следующему вопросу
+  const handleNext = () => {
+    if (currentIndex < questionsForGame.length - 1) {
+      setCurrentIndex(prev => prev + 1);
+    }
+  };
+
   return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-      <Text>Здесь будет викторина</Text>
+    <View style={styles.container}>
+      {/* Прогресс-бар / Счетчик */}
+      <Text style={styles.progressText}>
+        Вопрос {currentIndex + 1} из {questionsForGame.length}
+      </Text>
+
+      {/* Формулировка вопроса */}
+      <Text style={styles.questionText}>{currentQuestion.question}</Text>
+
+      {/* Флаг страны */}
+      <Image
+        source={{ uri: currentQuestion.flag }}
+        style={styles.flagImage}
+        resizeMode="contain"
+      />
+
+      {/* Сетка с 4 вариантами ответов */}
+      <View style={styles.optionsContainer}>
+        {options.map((option, index) => {
+          let buttonStyle = [styles.optionButton];
+          let textStyle = [styles.optionText];
+
+          // Логика подсветки после клика
+          if (selectedAnswer !== null) {
+            if (option === currentQuestion.correctAnswer) {
+              buttonStyle.push(styles.correctButton);
+              textStyle.push(styles.whiteText);
+            } else if (option === selectedAnswer) {
+              buttonStyle.push(styles.wrongButton);
+              textStyle.push(styles.whiteText);
+            }
+          }
+
+          return (
+            <TouchableOpacity
+              key={index}
+              style={buttonStyle}
+              activeOpacity={0.7}
+              onPress={() => handleOptionClick(option)}
+              disabled={selectedAnswer !== null}
+            >
+              <Text style={textStyle}>{option}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* Кнопка "Дальше" появляется только после выбора ответа */}
+      {selectedAnswer !== null && (
+        <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
+          <Text style={styles.nextButtonText}>
+            {currentIndex === questionsForGame.length - 1 
+              ? 'Завершить' 
+              : 'Дальше →'
+            }
+          </Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
 ```
 
-И обнови корень приложения — файл **`App.tsx`** (в корне проекта):
+---
 
-```tsx
-// App.tsx
-import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import WelcomeScreen from './src/screens/WelcomeScreen';
-import QuizScreen from './src/screens/QuizScreen';
-import { RootStackParamList } from './src/types';
+## 🎯 Проверка Урока 2:
 
-const Stack = createNativeStackNavigator<RootStackParamList>();
+1. Открой приложение на телефоне через Expo Go.
+2. Нажми «Начать игру» на главном экране.
+3. Проверь логику:
+* На кнопках рендерятся 4 уникальных названия стран (правильный ответ не дублируется в ошибочных вариантах).
+* При клике на правильный вариант кнопка становится **зеленой**.
+* При выборе ошибочного — кликнутая кнопка подсвечивается **красным**, а правильная параллельно окрашивается в **зеленый**.
+* После клика повторно нажимать кнопки нельзя.
+* Кнопка «Дальше →» появится только после того, как сделан выбор.
 
-export default function App() {
-  return (
-    <NavigationContainer>
-      <Stack.Navigator initialRouteName="Welcome">
-        <Stack.Screen 
-          name="Welcome" 
-          component={WelcomeScreen} 
-          options={{ headerShown: false }} // Скрываем верхнюю шапку
-        />
-        <Stack.Screen 
-          name="Quiz" 
-          component={QuizScreen} 
-          options={{ title: 'Викторина' }} 
-        />
-      </Stack.Navigator>
-    </NavigationContainer>
-  );
-}
-```
+---
 
-### Запуск!
-
-Выполни в терминале:
-
-```bash
-npx expo start
-```
-
-Скачай на телефон приложение **Expo Go** (iOS/Android), отсканируй QR-код из терминала камерой телефона и посмотри на свой первый мобильный экран. При клике на кнопку должен происходить плавный переход на экран викторины.
+**Запуск: `npx expo start`**
